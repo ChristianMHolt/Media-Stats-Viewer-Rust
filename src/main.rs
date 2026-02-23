@@ -6,11 +6,11 @@ use app::MediaStatsApp;
 use eframe::egui;
 
 fn main() -> eframe::Result<()> {
-    env_logger::init(); 
+    env_logger::init();
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1100.0, 600.0])
+            .with_inner_size([1200.0, 800.0])
             .with_drag_and_drop(true),
         ..Default::default()
     };
@@ -20,41 +20,62 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
-            
-            // --- VISUAL OVERHAUL START ---
+
             let mut style = (*cc.egui_ctx.style()).clone();
-            
-            // 1. Larger, more readable text (matching your CustomTkinter sizing)
+
+            // Fonts
             use egui::{FontFamily, FontId, TextStyle};
             style.text_styles = [
-                (TextStyle::Heading, FontId::new(24.0, FontFamily::Proportional)),
-                (TextStyle::Body, FontId::new(18.0, FontFamily::Proportional)),
-                (TextStyle::Monospace, FontId::new(18.0, FontFamily::Monospace)),
-                (TextStyle::Button, FontId::new(18.0, FontFamily::Proportional)),
-                (TextStyle::Small, FontId::new(14.0, FontFamily::Proportional)),
+                (TextStyle::Heading, FontId::new(28.0, FontFamily::Proportional)),
+                (TextStyle::Body, FontId::new(16.0, FontFamily::Proportional)),
+                (TextStyle::Monospace, FontId::new(14.0, FontFamily::Monospace)),
+                (TextStyle::Button, FontId::new(16.0, FontFamily::Proportional)),
+                (TextStyle::Small, FontId::new(12.0, FontFamily::Proportional)),
             ].into();
 
-            // 2. Better spacing so everything isn't crammed together
-            style.spacing.item_spacing = egui::vec2(10.0, 10.0);
-            style.spacing.button_padding = egui::vec2(12.0, 8.0);
-            
-            // 3. Force dark mode and apply rounded corners to all widgets
-            let mut visuals = egui::Visuals::dark();
-            let rounding = egui::Rounding::same(8.0);
-            visuals.widgets.noninteractive.rounding = rounding;
-            visuals.widgets.inactive.rounding = rounding;
-            visuals.widgets.hovered.rounding = rounding;
-            visuals.widgets.active.rounding = rounding;
-            visuals.widgets.open.rounding = rounding;
-            visuals.window_rounding = rounding;
-            
-            // 4. CustomTkinter Blue Accent Color
-            visuals.selection.bg_fill = egui::Color32::from_rgb(31, 106, 165); 
+            // Spacing
+            style.spacing.item_spacing = egui::vec2(8.0, 8.0);
+            style.spacing.window_margin = egui::Margin::same(16.0);
+            style.spacing.button_padding = egui::vec2(16.0, 10.0);
 
-            // Apply the new styles
+            // Visuals (Modern Dark Theme)
+            let mut visuals = egui::Visuals::dark();
+
+            // Colors
+            let bg_color = egui::Color32::from_rgb(30, 30, 46);       // Deep dark blue/grey
+            let panel_bg = egui::Color32::from_rgb(36, 36, 56);       // Slightly lighter
+            let text_color = egui::Color32::from_rgb(205, 214, 244);  // Soft white
+            let accent = egui::Color32::from_rgb(137, 180, 250);      // Soft blue
+            let widget_bg = egui::Color32::from_rgb(49, 50, 68);      // Surface color
+            let widget_hover = egui::Color32::from_rgb(69, 71, 90);   // Lighter surface
+
+            visuals.panel_fill = bg_color;
+            visuals.window_fill = bg_color;
+            visuals.override_text_color = Some(text_color);
+
+            visuals.widgets.noninteractive.bg_fill = panel_bg;
+            visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, text_color);
+
+            visuals.widgets.inactive.bg_fill = widget_bg;
+            visuals.widgets.inactive.rounding = egui::Rounding::same(6.0);
+            visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, text_color);
+
+            visuals.widgets.hovered.bg_fill = widget_hover;
+            visuals.widgets.hovered.rounding = egui::Rounding::same(6.0);
+            visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, text_color);
+
+            visuals.widgets.active.bg_fill = accent;
+            visuals.widgets.active.rounding = egui::Rounding::same(6.0);
+            visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, egui::Color32::BLACK);
+
+            visuals.selection.bg_fill = accent;
+            visuals.selection.stroke = egui::Stroke::new(1.0, accent);
+
+            visuals.window_rounding = egui::Rounding::same(12.0);
+            visuals.menu_rounding = egui::Rounding::same(6.0);
+
             cc.egui_ctx.set_visuals(visuals);
             cc.egui_ctx.set_style(style);
-            // --- VISUAL OVERHAUL END ---
 
             Ok(Box::new(MediaStatsApp::new(cc)))
         }),
