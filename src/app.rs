@@ -14,7 +14,7 @@ pub struct MediaStatsApp {
     config: AppConfig,
     sort_primary: Option<(SortColumn, SortOrder)>,
     sort_secondary: Option<(SortColumn, SortOrder)>,
-    
+
     // Scanning state
     is_scanning: bool,
     scan_receiver: Receiver<Vec<MediaItem>>,
@@ -62,7 +62,7 @@ impl MediaStatsApp {
         self.is_scanning = true;
         self.status_message = format!("Scanning: {}...", path);
         let tx = self.scan_sender.clone();
-        
+
         thread::spawn(move || {
             let items = scan_library(&path);
             let _ = tx.send(items);
@@ -78,7 +78,7 @@ impl MediaStatsApp {
 
     fn apply_filter_and_sort(&mut self) {
         let query = self.search_query.to_lowercase();
-        
+
         // Filter
         let mut indices: Vec<usize> = self.items.iter().enumerate()
             .filter(|(_, item)| {
@@ -124,7 +124,7 @@ impl MediaStatsApp {
             SortColumn::Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
             SortColumn::Season => a.season.as_deref().unwrap_or("").cmp(b.season.as_deref().unwrap_or("")),
             SortColumn::Group => a.group.to_lowercase().cmp(&b.group.to_lowercase()),
-            SortColumn::Resolution => a.resolution.cmp(&b.resolution), 
+            SortColumn::Resolution => a.resolution.cmp(&b.resolution),
             SortColumn::Source => a.source.to_lowercase().cmp(&b.source.to_lowercase()),
             SortColumn::VideoCodec => a.video_codec.to_lowercase().cmp(&b.video_codec.to_lowercase()),
             SortColumn::AudioCodec => a.audio_codec.to_lowercase().cmp(&b.audio_codec.to_lowercase()),
@@ -178,12 +178,29 @@ impl eframe::App for MediaStatsApp {
             self.apply_filter_and_sort();
         }
 
-        let mut status_changed = false;
-        let mut sort_action = None;
+        // --- Header Panel ---
+        egui::TopBottomPanel::top("header_panel")
+            .exact_height(80.0)
+            .show(ctx, |ui| {
+            ui.add_space(8.0);
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+            // Top Row: Title & Status
             ui.horizontal(|ui| {
-                if ui.button("Select Library Folder").clicked() {
+                ui.heading("Media Library Stats");
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if self.is_scanning {
+                        ui.spinner();
+                    }
+                    ui.label(egui::RichText::new(&self.status_message).italics().weak());
+                });
+            });
+
+            ui.add_space(8.0);
+
+            // Controls Row
+            ui.horizontal(|ui| {
+                // Library Selection
+                if ui.add(egui::Button::new("📂 Select Library Folder").min_size(egui::vec2(150.0, 32.0))).clicked() {
                     if let Some(path) = rfd::FileDialog::new().pick_folder() {
                         let path_str = path.to_string_lossy().to_string();
                         self.config.last_library_path = Some(path_str.clone());
@@ -192,46 +209,47 @@ impl eframe::App for MediaStatsApp {
                     }
                 }
 
-                let mut sort_mode = "Status: Default";
-                if let Some((SortColumn::Status, order)) = self.sort_primary {
-                    sort_mode = if order == SortOrder::Ascending { "Status: Best -> Worst" } else { "Status: Worst -> Best" };
-                }
-                
-                egui::ComboBox::from_id_salt("status_sort")
-                    .selected_text(sort_mode)
-                    .show_ui(ui, |ui| {
-                        if ui.selectable_label(sort_mode == "Status: Default", "Status: Default").clicked() {
-                            self.sort_primary = None;
-                            self.apply_filter_and_sort();
-                        }
-                        if ui.selectable_label(sort_mode == "Status: Best -> Worst", "Status: Best -> Worst").clicked() {
-                            self.sort_primary = Some((SortColumn::Status, SortOrder::Ascending));
-                            self.apply_filter_and_sort();
-                        }
-                        if ui.selectable_label(sort_mode == "Status: Worst -> Best", "Status: Worst -> Best").clicked() {
-                            self.sort_primary = Some((SortColumn::Status, SortOrder::Descending));
-                            self.apply_filter_and_sort();
-                        }
-                    });
+                ui.add_space(16.0);
 
-                ui.label(&self.status_message);
-                if self.is_scanning {
-                    ui.spinner();
-                }
-            });
-
-            ui.add_space(10.0);
-
-            ui.horizontal(|ui| {
-                ui.label("Search:");
-                if ui.text_edit_singleline(&mut self.search_query).changed() {
+                // Search Bar
+                ui.label("🔍");
+                let response = ui.add(egui::TextEdit::singleline(&mut self.search_query).hint_text("Search...").desired_width(250.0));
+                if response.changed() {
                     self.apply_filter_and_sort();
                 }
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // Sort Dropdown
+                    let mut sort_mode = "Status Rank: Default";
+                    if let Some((SortColumn::Status, order)) = self.sort_primary {
+                        sort_mode = if order == SortOrder::Ascending { "Status Rank: Best -> Worst" } else { "Status Rank: Worst -> Best" };
+                    }
+
+                    egui::ComboBox::from_id_salt("status_sort")
+                        .selected_text(sort_mode)
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.sort_primary, None, "Default").clicked().then(|| self.apply_filter_and_sort());
+
+                            if ui.selectable_label(sort_mode == "Status Rank: Best -> Worst", "Best -> Worst").clicked() {
+                                self.sort_primary = Some((SortColumn::Status, SortOrder::Ascending));
+                                self.apply_filter_and_sort();
+                            }
+                            if ui.selectable_label(sort_mode == "Status Rank: Worst -> Best", "Worst -> Best").clicked() {
+                                self.sort_primary = Some((SortColumn::Status, SortOrder::Descending));
+                                self.apply_filter_and_sort();
+                            }
+                        });
+                    ui.label("Sort by:");
+                });
             });
+        });
 
-            ui.add_space(10.0);
+        // --- Main Content ---
+        let mut status_changed = false;
+        let mut sort_action = None;
 
-            let items = &self.items;
+        egui::CentralPanel::default().show(ctx, |ui| {
+             let items = &self.items;
             let filtered = &self.filtered_indices;
             let config = &mut self.config;
             let mut actions = Vec::new();
@@ -249,7 +267,7 @@ impl eframe::App for MediaStatsApp {
                 .column(Column::initial(80.0).at_least(50.0))
                 .column(Column::initial(100.0).at_least(50.0))
                 .column(Column::initial(80.0).at_least(50.0))
-                .header(20.0, |mut header| {
+                .header(24.0, |mut header| {
                     let cols = [
                         ("Name", SortColumn::Name),
                         ("Season", SortColumn::Season),
@@ -258,10 +276,10 @@ impl eframe::App for MediaStatsApp {
                         ("Source", SortColumn::Source),
                         ("Video", SortColumn::VideoCodec),
                         ("Audio", SortColumn::AudioCodec),
-                        ("Avg Size", SortColumn::AvgSize),
+                        ("Size", SortColumn::AvgSize),
                         ("Verified", SortColumn::Verified),
                     ];
-                    
+
                     for (name, col_enum) in cols {
                          header.col(|ui| {
                              let response = ui.heading(name);
@@ -278,60 +296,82 @@ impl eframe::App for MediaStatsApp {
                         if idx >= items.len() { continue; }
                         let item = &items[idx];
                         let status_rank = StatusRank::from_item(item);
-                        
-                        let bg_color = match status_rank {
-                            StatusRank::Airing => egui::Color32::from_rgb(70, 130, 180),
-                            StatusRank::Great => egui::Color32::from_rgb(46, 139, 87),
-                            StatusRank::Good => egui::Color32::from_rgb(144, 238, 144),
-                            StatusRank::Okay => egui::Color32::from_rgb(255, 165, 0),
-                            StatusRank::Bad => egui::Color32::from_rgb(205, 92, 92),
-                            StatusRank::None => egui::Color32::TRANSPARENT,
-                        };
-                        
-                        let text_color = if status_rank == StatusRank::Good || status_rank == StatusRank::Okay {
-                            egui::Color32::BLACK
-                        } else {
-                            egui::Color32::WHITE
-                        };
 
-                        let row_height = 50.0;
+                        let row_height = 40.0;
 
                         body.row(row_height, |mut row| {
+                            // Name Column with Status Badge
+                            row.col(|ui| {
+                                ui.horizontal(|ui| {
+                                    let (badge_text, badge_color, badge_text_color) = match status_rank {
+                                        StatusRank::Airing => ("AIRING", egui::Color32::from_rgb(137, 180, 250), egui::Color32::BLACK),
+                                        StatusRank::Great => ("GREAT", egui::Color32::from_rgb(166, 227, 161), egui::Color32::BLACK),
+                                        StatusRank::Good => ("GOOD", egui::Color32::from_rgb(148, 226, 213), egui::Color32::BLACK),
+                                        StatusRank::Okay => ("OKAY", egui::Color32::from_rgb(249, 226, 175), egui::Color32::BLACK),
+                                        StatusRank::Bad => ("BAD", egui::Color32::from_rgb(243, 139, 168), egui::Color32::BLACK),
+                                        StatusRank::None => ("", egui::Color32::TRANSPARENT, egui::Color32::TRANSPARENT),
+                                    };
+
+                                    if !badge_text.is_empty() {
+                                        // Draw a simple badge
+                                        // We use Label for sizing
+                                        let label = egui::Label::new(
+                                            egui::RichText::new(badge_text)
+                                                .size(10.0)
+                                                .color(badge_text_color)
+                                                .strong()
+                                        );
+
+                                        // Manual background drawing for the pill effect
+                                        // We wrap the label in a Frame or just draw rect
+                                        egui::Frame::none()
+                                            .fill(badge_color)
+                                            .rounding(4.0)
+                                            .inner_margin(egui::vec2(4.0, 2.0))
+                                            .show(ui, |ui| {
+                                                ui.add(label);
+                                            });
+
+                                        ui.add_space(4.0);
+                                    }
+
+                                    ui.label(egui::RichText::new(&item.name).strong().size(16.0));
+                                });
+                            });
+
                             let add_content = |row: &mut egui_extras::TableRow, text: &str| {
                                 row.col(|ui| {
-                                    if status_rank != StatusRank::None {
-                                         let rect = ui.max_rect();
-                                         ui.painter().rect_filled(rect, 0.0, bg_color);
-                                    }
-                                    ui.label(egui::RichText::new(text).size(20.0).color(text_color));
+                                    ui.label(egui::RichText::new(text).size(14.0));
                                 });
                             };
 
-                            add_content(&mut row, &item.name);
                             add_content(&mut row, item.season.as_deref().unwrap_or(""));
                             add_content(&mut row, &item.group);
-                            add_content(&mut row, &item.resolution);
+
+                            // Highlight Resolution
+                            row.col(|ui| {
+                                ui.label(egui::RichText::new(&item.resolution).family(egui::FontFamily::Monospace).color(egui::Color32::from_rgb(137, 180, 250)));
+                            });
+
                             add_content(&mut row, &item.source);
                             add_content(&mut row, &item.video_codec);
                             add_content(&mut row, &item.audio_codec);
                             add_content(&mut row, &format!("{:.2} GB", item.avg_size_gb));
-                            
+
+                            // Verified Toggle
                             row.col(|ui| {
-                                if status_rank != StatusRank::None {
-                                     let rect = ui.max_rect();
-                                     ui.painter().rect_filled(rect, 0.0, bg_color);
-                                }
-                                
-                                // FIX: We clone the status into an owned string so we drop the read-reference immediately
                                 let current_status = config.media_statuses.get(&item.path).cloned().unwrap_or_default();
 
-                                let mark = match current_status.as_str() {
-                                    "verified" => "☑",
-                                    "rejected" => "☒",
-                                    _ => "☐",
+                                let (icon, color) = match current_status.as_str() {
+                                    "verified" => ("✔", egui::Color32::from_rgb(166, 227, 161)),
+                                    "rejected" => ("✘", egui::Color32::from_rgb(243, 139, 168)),
+                                    _ => ("○", egui::Color32::from_gray(100)),
                                 };
 
-                                let response = ui.add(egui::Label::new(egui::RichText::new(mark).size(20.0).color(text_color)).sense(egui::Sense::click()));
+                                let btn = egui::Button::new(egui::RichText::new(icon).size(18.0).color(color))
+                                    .frame(false);
+
+                                let response = ui.add(btn);
 
                                 if response.clicked() {
                                     let new_status = match current_status.as_str() {
@@ -339,7 +379,7 @@ impl eframe::App for MediaStatsApp {
                                         "verified" => Some("rejected".to_string()),
                                         _ => None,
                                     };
-                                    
+
                                     if let Some(s) = new_status {
                                         config.media_statuses.insert(item.path.clone(), s);
                                     } else {
@@ -352,7 +392,7 @@ impl eframe::App for MediaStatsApp {
                                         "rejected" => Some("verified".to_string()),
                                         _ => None,
                                     };
-                                    
+
                                     if let Some(s) = new_status {
                                         config.media_statuses.insert(item.path.clone(), s);
                                     } else {
@@ -364,7 +404,7 @@ impl eframe::App for MediaStatsApp {
                         });
                     }
                 });
-            
+
             if !actions.is_empty() {
                 sort_action = Some(actions[0]);
             }
